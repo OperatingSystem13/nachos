@@ -193,6 +193,9 @@ public class KThread {
 
 
 	currentThread.status = statusFinished;
+	if(currentThread.father != null) {
+		(currentThread.father).ready();
+}
 	
 	sleep();
     }
@@ -277,25 +280,14 @@ public class KThread {
 
 	Lib.assertTrue(this != currentThread);
 
-	/*if(this.status == statusFinished) return;
-	boolean intStatus = Machine.interrupt().disable();
-	KThread temp = currentThread;
-	sleep();
-	System.exit(1);
-	Machine.interrupt().restore(intStatus);
-	this.ready();
-	temp.ready();
-	return;   //not used, added on 3.18 */
-	
-	//added 3.18
-	while(this.status != statusFinished){
-		Lib.debug(dbgThread, "Yielding thread: " + currentThread.toString());
-		yield();
-		
+	if(this.status == statusFinished) return;
+	else {
+		boolean intStatus = Machine.interrupt().disable();
+		this.father = currentThread;
+		sleep();
+		Machine.interrupt().restore(intStatus);
 	}
-	return;
-	//
-	
+
     }
 
     /**
@@ -407,7 +399,6 @@ public class KThread {
 	
 	public void run() {
 	    for (int i=0; i<5; i++) {
-		//for(int i = 0; i < which + 5; i++){  //for testing, added on 3.18
 		System.out.println("*** thread " + which + " looped "
 				   + i + " times");
 		currentThread.yield();
@@ -423,10 +414,12 @@ public class KThread {
     public static void selfTest() {
 	Lib.debug(dbgThread, "Enter KThread.selfTest");
 	
-	//new KThread(new PingTest(1)).setName("forked thread").fork();
-	//new PingTest(0).run();
+	/*KThread temp = new KThread(new PingTest(1));
+	temp.setName("forked thread");
+	temp.fork();
+	temp.join();
+	new PingTest(0).run();*/
 	
-	//added 3.18
 	PingTest test1 = new PingTest(1);
 	KThread runtest1 = new KThread(test1);
 	runtest1.setName("forked thread1");
@@ -442,7 +435,6 @@ public class KThread {
 	
 	PingTest testprime = new PingTest(0);
 	testprime.run();
-	//
 	
     }
 
@@ -483,4 +475,5 @@ public class KThread {
     private static KThread currentThread = null;
     private static KThread toBeDestroyed = null;
     private static KThread idleThread = null;
+		 public KThread father = null;
 }
