@@ -276,9 +276,7 @@ public class KThread {
 	Lib.debug(dbgThread, "Joining to thread: " + toString());
 
 	Lib.assertTrue(this != currentThread);
-	
-	//modified 3.18
-	
+
 	/*if(this.status == statusFinished) return;
 	boolean intStatus = Machine.interrupt().disable();
 	KThread temp = currentThread;
@@ -287,14 +285,16 @@ public class KThread {
 	Machine.interrupt().restore(intStatus);
 	this.ready();
 	temp.ready();
-	return;*/
+	return;   //not used, added on 3.18 */
 	
+	//added 3.18
 	while(this.status != statusFinished){
 		Lib.debug(dbgThread, "Yielding thread: " + currentThread.toString());
 		yield();
 		
 	}
 	return;
+	//
 	
     }
 
@@ -406,8 +406,8 @@ public class KThread {
 	}
 	
 	public void run() {
-	    //for (int i=0; i<5; i++) {
-		for(int i = 0; i < which + 5; i++){
+	    for (int i=0; i<5; i++) {
+		//for(int i = 0; i < which + 5; i++){  //for testing, added on 3.18
 		System.out.println("*** thread " + which + " looped "
 				   + i + " times");
 		currentThread.yield();
@@ -426,7 +426,6 @@ public class KThread {
 	//new KThread(new PingTest(1)).setName("forked thread").fork();
 	//new PingTest(0).run();
 	
-	
 	//added 3.18
 	PingTest test1 = new PingTest(1);
 	KThread runtest1 = new KThread(test1);
@@ -443,7 +442,7 @@ public class KThread {
 	
 	PingTest testprime = new PingTest(0);
 	testprime.run();
-	
+	//
 	
     }
 
