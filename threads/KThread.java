@@ -276,7 +276,24 @@ public class KThread {
 	Lib.debug(dbgThread, "Joining to thread: " + toString());
 
 	Lib.assertTrue(this != currentThread);
-
+	
+	//modified 3-18
+	/*if(this.status == statusFinished) return;
+	boolean intStatus = Machine.interrupt().disable();
+	KThread temp = currentThread;
+	sleep();
+	System.exit(1);
+	Machine.interrupt().restore(intStatus);
+	this.ready();
+	temp.ready();
+	return;*/
+	
+	
+	while(this.status != statusFinished){
+		yield();
+	}
+	return;
+	
     }
 
     /**
@@ -387,7 +404,8 @@ public class KThread {
 	}
 	
 	public void run() {
-	    for (int i=0; i<5; i++) {
+	    //for (int i=0; i<5; i++) {
+		for(int i = 0; i < which + 5; i++){
 		System.out.println("*** thread " + which + " looped "
 				   + i + " times");
 		currentThread.yield();
@@ -403,8 +421,26 @@ public class KThread {
     public static void selfTest() {
 	Lib.debug(dbgThread, "Enter KThread.selfTest");
 	
-	new KThread(new PingTest(1)).setName("forked thread").fork();
-	new PingTest(0).run();
+	//new KThread(new PingTest(1)).setName("forked thread").fork();
+	//new PingTest(0).run();
+	
+	
+	//added 3.18
+	PingTest test1 = new PingTest(2);
+	KThread runtest1 = new KThread(test1);
+	runtest1.setName("forked thread1");
+	runtest1.fork();
+	
+	PingTest test2 = new PingTest(1);
+	KThread runtest2 = new KThread(test2);
+	runtest2.setName("forked thread2");
+	runtest2.fork();
+	
+	PingTest testprime = new PingTest(0);
+	testprime.run();
+	
+	runtest1.join();
+	runtest2.join();
     }
 
     private static final char dbgThread = 't';
