@@ -277,7 +277,8 @@ public class KThread {
 
 	Lib.assertTrue(this != currentThread);
 	
-	//modified 3-18
+	//modified 3.18
+	
 	/*if(this.status == statusFinished) return;
 	boolean intStatus = Machine.interrupt().disable();
 	KThread temp = currentThread;
@@ -288,9 +289,10 @@ public class KThread {
 	temp.ready();
 	return;*/
 	
-	
 	while(this.status != statusFinished){
+		Lib.debug(dbgThread, "Yielding thread: " + currentThread.toString());
 		yield();
+		
 	}
 	return;
 	
@@ -426,21 +428,23 @@ public class KThread {
 	
 	
 	//added 3.18
-	PingTest test1 = new PingTest(2);
+	PingTest test1 = new PingTest(1);
 	KThread runtest1 = new KThread(test1);
 	runtest1.setName("forked thread1");
 	runtest1.fork();
 	
-	PingTest test2 = new PingTest(1);
+	PingTest test2 = new PingTest(2);
 	KThread runtest2 = new KThread(test2);
 	runtest2.setName("forked thread2");
 	runtest2.fork();
 	
+	runtest1.join();
+	runtest2.join();
+	
 	PingTest testprime = new PingTest(0);
 	testprime.run();
 	
-	runtest1.join();
-	runtest2.join();
+	
     }
 
     private static final char dbgThread = 't';
