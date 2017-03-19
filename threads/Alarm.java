@@ -2,6 +2,8 @@ package nachos.threads;
 
 import nachos.machine.*;
 
+import java.util.ArrayList;
+/***/
 /**
  * Uses the hardware timer to provide preemption, and to allow threads to sleep
  * until a certain time.
@@ -18,6 +20,8 @@ public class Alarm {
 	Machine.timer().setInterruptHandler(new Runnable() {
 		public void run() { timerInterrupt(); }
 	    });
+		waitQueue=new ArrayList<waiting>();
+		queueControl = new Semaphore(1);
     }
 
     /**
@@ -28,6 +32,20 @@ public class Alarm {
      */
     public void timerInterrupt() {
 	KThread.currentThread().yield();
+		int i;
+		long currentTime = Machine.timer().getTime();
+		queueControl.P();		
+		for(i = 0; i < waitQueue.size(); i++) {
+				waiting next = (waiting)waitQueue.get(i);
+				if(currentTime >= next.wakeTime) {			
+						(next.item).ready();
+						waitQueue.remove(i);
+						i--;
+				}
+		}
+		queueControl.V();
+		
+		
     }
 
     /**
@@ -47,7 +65,22 @@ public class Alarm {
     public void waitUntil(long x) {
 	// for now, cheat just to get something working (busy waiting is bad)
 	long wakeTime = Machine.timer().getTime() + x;
-	while (wakeTime > Machine.timer().getTime())
-	    KThread.yield();
+	boolean intStatus = Machine.interrupt().disable();	
+	queueControl.P();
+	waiting newItem = new waiting();
+	newItem.item = KThread.currentThread();
+	newItem.wakeTime = wakeTime;
+	waitQueue.add(newItem);
+	queueControl.V();	
+	KThread.sleep();
+	Machine.interrupt().restore(intStatus);
+	//while (wakeTime > Machine.timer().getTime())
+	//    KThread.yield();
     }
+	public class waiting {
+		public KThread item;
+		public long wakeTime;
+	}
+	ArrayList<waiting> waitQueue;
+	Semaphore queueControl;
 }

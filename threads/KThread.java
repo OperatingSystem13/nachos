@@ -433,6 +433,8 @@ public class KThread {
 	runtest1.join();
 	runtest2.join();
 	
+	new Alarm().waitUntil(10000000);
+	
 	PingTest testprime = new PingTest(0);
 	testprime.run();
 	
