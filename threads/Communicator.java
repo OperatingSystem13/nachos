@@ -18,7 +18,7 @@ public class Communicator {
     public Communicator() {
 			status=NEW;
 			conditionLock=new Lock();
-			lockForChannel=new Condition( conditionLock );
+			lockForChannel = new Condition( conditionLock );
     }
 
     /**
@@ -45,6 +45,7 @@ public class Communicator {
 			}
 			else {
 					this.word = word;
+					status = READY;
 					lockForChannel.wake();
 			}
 			conditionLock.release();
@@ -80,16 +81,16 @@ public class Communicator {
 	return rword;
     }
     
-    private static class TestClass implements Runnable{
-    	TestClass(Communicator channel, int[] data){
+    private static class TestSender implements Runnable{
+    	TestSender(Communicator channel, int[] data){
     		this.channel = channel;
     		this.data = data;
     	}
     	
     	public void run(){
-    	for(int i = 0; i < 4; i++){
+    	for(int i = 0; i < 23; i++){
     			channel.speak(data[i]);
-    			System.out.println("speak: " + data[i]);
+    			//System.out.println("speak: " + data[i]);
     			
     		}
     	}
@@ -97,24 +98,46 @@ public class Communicator {
     	private int[] data;
     }
     
+    private static class TestReceiver implements Runnable{
+    	TestReceiver(Communicator channel, int[] received){
+    		this.channel = channel;
+    		this.received = received;
+    	}
+    	
+    	public void run(){
+    	for(int i = 0; i < 23; i++){
+    			received[i] = channel.listen();
+    			//System.out.println("listen: " + received[i]);
+    			
+    		}
+    	}
+    	private Communicator channel;
+    	private int[] received;
+    }
+    
     public static void selfTest(){
-    	int[] data = new int[4];
-    	int[] received = new int[4];
-    	for(int i = 0; i < 4; i++){
+    	int[] data = new int[23];
+    	int[] received = new int[23];
+    	for(int i = 0; i < 23; i++){
             Random random = new Random();
-            data[i] = random.nextInt() % 50;
+            data[i] = random.nextInt();
     	}
     	Communicator test = new Communicator();
-    	new KThread(new TestClass(test, data)).setName("sender").fork();
-    	for(int i = 0; i < 4; i++){
-			received[i] = test.listen();
-			System.out.println("listen: " + received[i]);
-			
-		}
     	
-    	/*for(int i= 0; i < 4; i++){
+    	KThread s = new KThread(new TestSender(test, data));
+    	s.setName("sender");
+    	s.fork();
+    	
+    	KThread r = new KThread(new TestReceiver(test, received));
+    	r.setName("receiver");
+    	r.fork();
+    	
+    	s.join();
+    	r.join();
+    	
+    	for(int i= 0; i < 23; i++){
     		Lib.assertTrue(data[i] == received[i]);
-    	}*/
+    	}
     }
 
 	private Condition lockForChannel;
