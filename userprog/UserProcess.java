@@ -27,6 +27,13 @@ public class UserProcess {
 	pageTable = new TranslationEntry[numPhysPages];
 	for (int i=0; i<numPhysPages; i++)
 	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
+	
+	//added for 2.1
+	files = new OpenFile[16];
+	files[0] = UserKernel.console.openForReading();
+	files[1] = UserKernel.console.openForWriting();
+	//
+	
     }
     
     /**
@@ -346,9 +353,116 @@ public class UserProcess {
 	return 0;
     }
 
+    //added for 2.1
 
+    private int handleCreate(int address){
+    	int result = -1;
+    	String name = readVirtualMemoryString(address, 256);
+    	if(name == null) return -1;
+    	boolean flag = false;
+    	for(int i = 2; i < 16; i++){
+    		if(files[i] == null) {
+    			flag = true;
+    			continue;
+    		}
+    		if(files[i].getName().equals(name)){
+    			return i;
+    		}
+    	}
+    	if(flag == false) return -1;
+    	boolean create = true;
+    	OpenFile re = ThreadedKernel.fileSystem.open(name, create);
+    	for(int i = 2; i < 16; i++){
+    		if(files[i] == null){
+    			result = i;
+    			files[i] = re;
+    			break;
+    		}	
+    	}
+    	return result;
+    }
+    
+    private int handleOpen(int address){
+    	int result = -1;
+    	String name = readVirtualMemoryString(address, 256);
+    	if(name == null) return -1;
+    	boolean flag = false;
+    	for(int i = 2; i < 16; i++){
+    		if(files[i] == null) {
+    			flag = true;
+    			continue;
+    		}
+    		if(files[i].getName().equals(name)){
+    			return i;
+    		}
+    	}
+    	if(flag == false) return -1;
+    	boolean create = false;
+    	OpenFile re = ThreadedKernel.fileSystem.open(name, create);
+    	for(int i = 2; i < 16; i++){
+    		if(files[i] == null){
+    			result = i;
+    			files[i] = re;
+    			break;
+    		}	
+    	}
+    	return result;
+    }
+    
+    private int handleRead(int index, int address, int count){
+    	int result = -1;
+    	if(index < 0 || index > 15 || index == 1) return -1;
+    	if(count < 0) return -1;
+    	if(files[index] == null) return -1;
+    	byte[] buffer = new byte[count];
+    	result = files[index].read(buffer, 0, count);
+    	if(result < 0) return 0;
+    	writeVirtualMemory(address, buffer);
+    	return result;
+    }
+    
+    private int handleWrite(int index, int address, int count){
+    	int result = -1;
+    	if(index <= 0 || index > 15) return -1;
+    	if(count < 0) return -1;
+    	if(files[index] == null) return -1;
+    	byte[] buffer = new byte[count];
+    	result = readVirtualMemory(address, buffer, 0, count);
+    	if(result < 0) return 0;
+    	result = files[index].write(buffer, 0, result);
+    	if(result < count) return -1;
+    	else return result;
+    }
+    
+    private int handleClose(int index){
+    	int result = -1;
+    	if(index < 2 || index > 15) return -1;
+    	if(files[index] == null) return -1;
+    	else {
+    		files[index].close();
+    		files[index] = null;
+    		return 0;
+    	}
+    }
+    
+    private int handleUnlink(int address){
+    	int result = -1;
+    	String name = readVirtualMemoryString(address, 256);
+    	if(name == null) return -1;
+    	for(int i = 2; i < 16; i++){
+    		if(files[i] == null) continue;
+    		if(files[i].getName().equals(name)){
+    			files[i] = null;	
+    		}
+    	}
+    	ThreadedKernel.fileSystem.remove(name);
+		return 0;
+    }
+    //
+    
+    
     private static final int
-        syscallHalt = 0,
+    syscallHalt = 0,
 	syscallExit = 1,
 	syscallExec = 2,
 	syscallJoin = 3,
@@ -391,7 +505,21 @@ public class UserProcess {
 	switch (syscall) {
 	case syscallHalt:
 	    return handleHalt();
-
+	    
+	//added for 2.1
+	case syscallCreate:
+		return handleCreate(a0);
+	case syscallOpen:
+		return handleOpen(a0);
+	case syscallRead:
+		return handleRead(a0, a1, a2);
+	case syscallWrite:
+		return handleWrite(a0,a1, a2);
+	case syscallClose:
+		return handleClose(a0);
+	case syscallUnlink:
+		return handleUnlink(a0);
+	//
 
 	default:
 	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
@@ -446,4 +574,8 @@ public class UserProcess {
 	
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
+    
+    //added for 2.1
+    private OpenFile[] files;
+    //
 }
