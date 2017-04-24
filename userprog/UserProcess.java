@@ -3,7 +3,8 @@ package nachos.userprog;
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
-
+import java.util.*;
+import java.awt.Point;
 import java.io.EOFException;
 
 /**
@@ -22,18 +23,30 @@ public class UserProcess {
     /**
      * Allocate a new process.
      */
-    public UserProcess() {
+	  /* 
+     * Remove for 2.2. pageTable allocation move to loadSection
+     * 
 	int numPhysPages = Machine.processor().getNumPhysPages();
 	pageTable = new TranslationEntry[numPhysPages];
 	for (int i=0; i<numPhysPages; i++)
 	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
-	
+	*/
+	 public UserProcess() {
 	//added for 2.1
 	files = new OpenFile[16];
 	files[0] = UserKernel.console.openForReading();
 	files[1] = UserKernel.console.openForWriting();
 	//
 	
+	//added for 2.3
+	boolean intStatus = Machine.interrupt().disable();
+	this.ID = IDcount;
+	IDcount++;
+	pcount++;
+	Machine.interrupt().restore(intStatus);
+	children = new LinkedList<Point>();
+	child = new LinkedList<UserProcess>();
+	//
     }
     
     /**
@@ -59,7 +72,11 @@ public class UserProcess {
 	if (!load(name, args))
 	    return false;
 	
-	new UThread(this).setName(name).fork();
+	thread = new UThread(this);
+	thread.setName(name);
+	thread.fork();
+	
+	//new UThread(this).setName(name).fork();
 
 	return true;
     }
@@ -140,13 +157,34 @@ public class UserProcess {
 
 	byte[] memory = Machine.processor().getMemory();
 	
+	
+	//removed for 2.2
 	// for now, just assume that virtual addresses equal physical addresses
-	if (vaddr < 0 || vaddr >= memory.length)
+	/*if (vaddr < 0 || vaddr >= memory.length)
 	    return 0;
 
 	int amount = Math.min(length, memory.length-vaddr);
-	System.arraycopy(memory, vaddr, data, offset, amount);
-
+	System.arraycopy(memory, vaddr, data, offset, amount);*/
+	//
+	
+	//added for 2.2
+	int amount = 0;
+	int nextaddr;
+	for (int addr = vaddr; amount < length; addr = nextaddr) {
+		nextaddr = (vaddr / Processor.pageSize + 1) * Processor.pageSize;
+		
+		int ppn = pageTable[Processor.pageFromAddress(addr)].ppn;
+		int poffset = Processor.offsetFromAddress(addr);
+		int paddr = Processor.makeAddress(ppn, poffset);
+		if (paddr < 0 || paddr >= memory.length)
+		    return amount;
+		int thisLen = Math.min(Math.min(nextaddr - addr, length - amount), memory.length-addr);
+		
+		System.arraycopy(memory, paddr, data, offset + amount, thisLen);
+		amount += thisLen;
+	}
+	//
+	
 	return amount;
     }
 
@@ -183,13 +221,35 @@ public class UserProcess {
 
 	byte[] memory = Machine.processor().getMemory();
 	
+	//removed for 2.2
 	// for now, just assume that virtual addresses equal physical addresses
-	if (vaddr < 0 || vaddr >= memory.length)
+	/*if (vaddr < 0 || vaddr >= memory.length)
 	    return 0;
 
 	int amount = Math.min(length, memory.length-vaddr);
-	System.arraycopy(data, offset, memory, vaddr, amount);
-
+	System.arraycopy(data, offset, memory, vaddr, amount);*/
+	//
+	
+	//added for 2.2
+	int amount = 0;
+	int nextaddr;
+	for (int addr = vaddr; amount < length; addr = nextaddr) {
+		nextaddr = (vaddr / Processor.pageSize + 1) * Processor.pageSize;
+		if (pageTable[Processor.pageFromAddress(addr)].readOnly)
+			continue;
+		
+		int ppn = pageTable[Processor.pageFromAddress(addr)].ppn;
+		int poffset = Processor.offsetFromAddress(addr);
+		int paddr = Processor.makeAddress(ppn, poffset);
+		if (paddr < 0 || paddr >= memory.length)
+		    return amount;
+		int thisLen = Math.min(Math.min(nextaddr - addr, length - amount), memory.length-addr);
+		
+		System.arraycopy(data, offset + amount, memory, paddr, thisLen);
+		amount += thisLen;
+	}
+	//
+	
 	return amount;
     }
 
@@ -289,12 +349,28 @@ public class UserProcess {
      * @return	<tt>true</tt> if the sections were successfully loaded.
      */
     protected boolean loadSections() {
-	if (numPages > Machine.processor().getNumPhysPages()) {
+    //removed for 2.2
+	/*if (numPages > Machine.processor().getNumPhysPages()) {
 	    coff.close();
 	    Lib.debug(dbgProcess, "\tinsufficient physical memory");
 	    return false;
-	}
+	}*/
+   //
 
+    	
+    //added for 2.2
+    	pageTable = new TranslationEntry[numPages];
+        for (int vpn = 0; vpn < numPages; vpn++) {
+        	int ppn = UserKernel.allocatePage();
+    		if (ppn == -1) {
+    		    coff.close();
+    		    Lib.debug(dbgProcess, "\tinsufficient physical memory");
+    		    return false;
+    		}
+    		pageTable[vpn] = new TranslationEntry(vpn,ppn, true,false,false,false);
+        }
+    //
+    	
 	// load sections
 	for (int s=0; s<coff.getNumSections(); s++) {
 	    CoffSection section = coff.getSection(s);
@@ -317,6 +393,11 @@ public class UserProcess {
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
     protected void unloadSections() {
+    //added for 2.2
+    	for (int vpn = 0; vpn < numPages; vpn++) {
+        	Lib.assertTrue( UserKernel.releasePage(pageTable[vpn].ppn));
+        }
+    //
     }    
 
     /**
@@ -347,6 +428,10 @@ public class UserProcess {
      */
     private int handleHalt() {
 
+    //added for 2.1
+    if(this.ID != 0) return 0;
+    //
+    	
 	Machine.halt();
 	
 	Lib.assertNotReached("Machine.halt() did not halt machine!");
@@ -460,6 +545,82 @@ public class UserProcess {
     }
     //
     
+    //added for 2.3
+    private int handleExit(int status){
+    	coff.close();
+    	for(int i = 2; i < 16; i++){
+    		if(files[i] != null){
+    			files[i].close();
+    			files[i] = null;
+    		}
+    	}
+    	unloadSections();
+    	pcount--;
+    	if(father != null){
+    		for(int i = 0; i < father.children.size(); i++){
+    			if(father.children.get(i).getX() == this.ID){
+    				father.children.get(i).setLocation(this.ID, status);
+    			}
+    		}
+    		for(int i = 0; i < father.child.size(); i++){
+    			if(father.child.get(i).ID == this.ID){
+    				father.children.remove(i);
+    			}
+    		}
+    	}
+    	if(pcount == 0)  Kernel.kernel.terminate();
+    	return 0;
+    }
+    
+    private int handleExec(int faddress, int argc, int argv){
+    	if(faddress < 0) return -1;
+    	String name = readVirtualMemoryString(faddress, 256);
+    	if(name == null) return -1;
+    	if(argc < 0) return -1;
+    	if(argv < 0) return -1;
+    	String args[] = new String[argc];
+    	for(int i = 0; i < argc; i++){
+    		byte[] temp = new byte[4];
+    		readVirtualMemory(argv + i * 4, temp);
+    		int result = Lib.bytesToInt(temp, 0);
+    		if(result < 0) return -1;
+    		args[i] = readVirtualMemoryString(result, 256);
+    	}
+    	UserProcess newprocess = new UserProcess();
+    	newprocess.father = this;
+    	this.children.add(new Point(newprocess.ID, 0));
+    	this.child.add(newprocess);
+    	boolean res = newprocess.execute(name, args);
+    	if(res == false) return -1;
+    	return newprocess.ID;
+    }
+    
+    private int handleJoin(int pid, int address){
+    	if(address < 0) return -1;
+    	int result = 0;
+    	boolean flag = false;
+    	int index = 0;
+    	int index2 = 0;
+    	for(int i = 0; i < children.size(); i++){
+    		if(children.get(i).getX() == pid){
+    			index = i;
+    			flag = true;
+    		}
+    	}
+    	if(flag == false) return -1;
+    	for(int i = 0; i < child.size(); i++){
+    		if(child.get(i).ID == pid){
+    			index2 = i;
+    		}
+    	}
+    	child.get(index2).thread.join();
+    	result = (int)(children.get(index).getY());
+    	byte[] temp = new byte[4];
+    	temp = Lib.bytesFromInt(result);
+    	writeVirtualMemory(address, temp);
+    	return 0;
+    }
+    //
     
     private static final int
     syscallHalt = 0,
@@ -520,6 +681,15 @@ public class UserProcess {
 	case syscallUnlink:
 		return handleUnlink(a0);
 	//
+		
+	//added for 2.3
+	case syscallExit:
+		return handleExit(a0);
+	case syscallExec:
+		return handleExec(a0, a1, a2);
+	case syscallJoin:
+		return handleJoin(a0, a1);
+	//
 
 	default:
 	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
@@ -577,5 +747,15 @@ public class UserProcess {
     
     //added for 2.1
     private OpenFile[] files;
+    //
+    
+    //added for 2.3
+    public int ID;
+    private static int IDcount = 0;
+    private static int pcount = 0;
+    private UserProcess father = null;
+    private LinkedList<Point> children;
+    private LinkedList<UserProcess> child;
+    private KThread thread;
     //
 }

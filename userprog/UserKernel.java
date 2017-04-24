@@ -1,5 +1,5 @@
 package nachos.userprog;
-
+import java.util.LinkedList;
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
@@ -8,6 +8,54 @@ import nachos.userprog.*;
  * A kernel that can support multiple user processes.
  */
 public class UserKernel extends ThreadedKernel {
+	
+	//added for 2.2
+	// Static variable for global pagetable
+    private static LinkedList<Integer> freePages;
+    private static LinkedList<Integer> usedPages;
+    
+	// Initialize the global page table
+	static {
+		freePages = new LinkedList<Integer>();
+		usedPages = new LinkedList<Integer>();
+		for (int i = 0; i < Machine.processor().getNumPhysPages(); i++)
+			freePages.add(i);
+	}
+	
+	/**
+	 * Allocate a physical page
+	 * If FAIL, return -1
+	 */
+	public static int allocatePage() {
+		int pageNum;
+		boolean intStatus = Machine.interrupt().disable();
+		if (freePages.size() == 0) 
+			pageNum = -1;
+		else {
+			pageNum = (int) freePages.getFirst();
+			usedPages.add(freePages.removeFirst());
+		}
+		Machine.interrupt().restore(intStatus);
+		return pageNum;
+	}
+	
+	/**
+	 * Release a physical page
+	 * If pageNum is not used, return false
+	 */
+	public static boolean releasePage(int pageNum) {
+		boolean intStatus = Machine.interrupt().disable();
+		if ( !usedPages.remove((Integer) pageNum) ) {
+			Machine.interrupt().restore(intStatus);
+			return false;
+		}
+		freePages.add(pageNum);
+		Machine.interrupt().restore(intStatus);
+		return true;
+	}
+	
+	
+	//
     /**
      * Allocate a new user kernel.
      */
@@ -33,7 +81,7 @@ public class UserKernel extends ThreadedKernel {
      * Test the console device.
      */	
     public void selfTest() {
-	//super.selfTest();
+	super.selfTest();
 
 	System.out.println("Testing the console device. Typed characters");
 	System.out.println("will be echoed until q is typed.");
